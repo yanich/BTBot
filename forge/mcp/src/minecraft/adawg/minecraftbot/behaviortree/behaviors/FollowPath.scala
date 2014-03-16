@@ -4,7 +4,6 @@ import behaviortree._
 import behaviortree.BehaviorStatus._
 import behaviortree.NodeImplicits._
 import BotImplicits._
-import scala.util.Random
 import adawg.minecraftbot.RichVec3
 import adawg.minecraftbot.BotWrapper
 import adawg.minecraftbot.BotHelper._
@@ -18,20 +17,17 @@ import scala.concurrent.duration._
 import scala.concurrent.Await
 import scala.util.Failure
 import java.util.concurrent.atomic.AtomicBoolean
-import com.kunii.mcbot.McBot
-import com.kunii.mcbot.Camera
-import net.minecraft.client.Minecraft
 import scala.collection.JavaConversions._
 import com.google.common.util.concurrent.RateLimiter
 import adawg.minecraftbot.pathfinding.LocationUtils
 import net.minecraft.block.material.Material
 import adawg.minecraftbot.behaviortree.decorators.DecoratorImplicits._
-import adawg.minecraftbot.util.Util
 import adawg.minecraftbot.behaviortree.gui.DoubleInput
 import adawg.minecraftbot.behaviortree.gui.Input
+
 /**
  * Do everything it takes to reach one of the goals.
- * Returns success when path is calculated.  Fails if pathfinder returns no path.
+ * Returns success when a goal is reached.  Fails if pathfinder returns no path.
  */
 class FollowPath(goals: => Seq[Vec3]) extends Node {
   import FollowPath._
@@ -156,16 +152,20 @@ class FollowPath(goals: => Seq[Vec3]) extends Node {
 }
 object FollowPath {
   def apply(goal: => Vec3) = new FollowPath(Seq(goal))
-  //  def apply(goal: => Seq[Vec3]) = new FollowPath(goal)
+  
   lazy val pathfinder = new MinecraftPathFinder(400, 100, 400)
+  
+  def resetPathfinder() = pathfinder.resetNodeStorage(100, 254, 100, player.posX.toInt, 0, player.posZ.toInt)
+  
   case class NoPathException extends Throwable
   case class NoGoalsException extends Throwable
   
   // Returns a future path from the player's location to the goal.
-  def pathFuture(goal: Vec3, timeout: FiniteDuration = 0.1 seconds): Future[Path3D] = {
+  def pathFuture(goal: Vec3, 
+      timeout: FiniteDuration = 0.1 seconds,
+      cancelFlag: AtomicBoolean = new AtomicBoolean(false)): Future[Path3D] = {
     val promise = Promise[Path3D]
     future {
-      val cancelFlag = new AtomicBoolean(false)
       val calculation = future {
         FollowPath.pathfinder.findPath(player.getLocation, goal, 400, cancelFlag)
       }
@@ -207,18 +207,21 @@ object FollowPath {
   
 }
 
+/**
+ * New W.I.P. version of FollowPath
+ * Eliminates pathSequence to allow tweaking path-following parameters.
+ */
 import FollowPath._
-abstract class FollowPath2(
-    goal: () => Vec3,
-    goalRadius: Input[Double] = new DoubleInput("goal radius", 0.3),
-    maxSpeed: Input[Double] = new DoubleInput("max speed in", 2),
-    walkThreshold: Input[Double] = new DoubleInput("walk threshold", 1),
-    jumpThreshold: Input[Double] = new DoubleInput("jump threshold", 1),
-    
-//    pathCalculator: Seq[Vec3] => Future[Path3D] = tryInOrder
-    pathfindTimeout: Input[Double] = new DoubleInput("pathfind timeout (s)", 0.1)
-    )
-    extends Node {
+class FollowPath2(
+  goal: () => Vec3,
+  goalRadius: Input[Double] = new DoubleInput("goal radius", 0.3),
+  maxSpeed: Input[Double] = new DoubleInput("max speed in", 2),
+  walkThreshold: Input[Double] = new DoubleInput("walk threshold", 1),
+  jumpThreshold: Input[Double] = new DoubleInput("jump threshold", 1),
+
+  //    pathCalculator: Seq[Vec3] => Future[Path3D] = tryInOrder
+  pathfindTimeout: Input[Double] = new DoubleInput("pathfind timeout (s)", 0.1))
+  extends Node {
   
   // A sequence of coordinates leading from player to goal.
   var path: Seq[Vec3] = Seq()
@@ -227,23 +230,34 @@ abstract class FollowPath2(
   // When the calculation finishes, it resets this to None
   var pathCalculation: Option[Future[Path3D]] = None 
   
-  // When the calculation fails, it sets this to true.
-  // When it succeeds, it sets this to false.
+  /**
+   * Set this to true in order to cancel an ongoing path calculation.
+   */
+  var pathCancelFlag: Option[AtomicBoolean] = None
+  
+  // Set to true when the calculation fails
+  // Set to false when the calculation succeeds
   // It is used to determine whether Running or Failed is returned when 
-  // we're in between paths.
+  // we're waiting for a new path to be calculated.
   var lastPathFailed = false
   
-  def makeNewPath() {
-    pathCalculation = Some(pathFuture(goal(), pathfindTimeout.get seconds))
+  
+  def calculateNewPath() {
+    val cancelFlag = new AtomicBoolean(false)
+    pathCancelFlag = Some(cancelFlag)
+    
+    pathCalculation = Some(pathFuture(goal(), pathfindTimeout.get seconds, cancelFlag))
     pathCalculation.map { pc =>
       pc.onFailure {
-        case _@ (_: NoPathException | _: TimeoutException) => lastPathFailed = true
+        case _ @ (_: NoPathException | _: TimeoutException) => lastPathFailed = true
         case e => throw e
       }
+      
       pc.onSuccess {
         case newPath => path = newPath.getSteps.map {step => step.toVec3()}; lastPathFailed = false
       }
-      pc.onComplete(_ => pathCalculation = None)
+      
+      pc.onComplete {case _ => pathCalculation = None; pathCancelFlag = None}
       
     }
   }
@@ -251,12 +265,14 @@ abstract class FollowPath2(
   def isFinished = playerLoc.distanceTo(goal()) < goalRadius.get
   def stepIsCompleted = path.headOption map { playerLoc.distanceTo(_) < goalRadius.get } getOrElse false
   
+  def update = Error
   override def update2() = {
     if (isFinished) {
       (Success, InputState())
       
     } else if (path == Seq()) {
-      if (pathCalculation == None) makeNewPath()
+      if (pathCalculation == None) calculateNewPath()
+      
       if (lastPathFailed) (Failed, InputState())
       else (Running, InputState())
       
@@ -269,5 +285,17 @@ abstract class FollowPath2(
       (Running, BotHelper.walkWhileLooking(path.head, maxSpeed.get, walkThreshold.get, jumpThreshold.get))
     }
     
+  }
+  
+  /**
+   * Cancel the current path calculation.
+   * Forget about the path, forget about whether the last path calculation failed.
+   */
+  def resetState {
+    lastPathFailed = false
+    path = Seq()
+    pathCalculation = None
+    pathCancelFlag map {_.set(true)}
+    pathCancelFlag = None
   }
 }

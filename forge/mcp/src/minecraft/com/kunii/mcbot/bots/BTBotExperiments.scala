@@ -28,7 +28,12 @@ import adawg.minecraftbot.BotWrapper
 import adawg.minecraftbot.behaviortree.InputState
 import adawg.minecraftbot.BotHelper
 
-class BTBot extends CoreBot {
+/**
+ * I use this file to experiment.  If you recompile it while minecraft is running,
+ * you can use shift+F9 to reload bots, then load up the new version w/o restarting.
+ * It might not work as expected if you edit files outside of this one, tho.
+ */
+class BTBotExperiments extends CoreBot {
   
   lazy val rootNode: Node = 
     mkRootNode
@@ -44,7 +49,7 @@ class BTBot extends CoreBot {
 
   lazy val gui = new BehaviorTreeWindow()
   var running: Boolean = false
-  def botName: String = "BTBot"
+  def botName: String = "BTBot experiments"
   def inGameLoop(x: net.minecraft.client.Minecraft): Int = {
     val forwardsComponent = playerVelocity.dotProduct(forwardsVector)
     val sidewaysComponent = playerVelocity.dotProduct(rightVector)
@@ -108,7 +113,6 @@ class BTBot extends CoreBot {
     val mine = new TryMiningBlocks(oreIds)
 //    new FollowPath(Seq(in1.get, in2.get))
     val mineBlocks = new MineBlocks(heightInput.get, oreIds, itemIds)
-    new PickUpItems(7, itemIds)
     val mineTest = PriorityNode(false, 0.2)(
       // PickUpItems seems to make the rest of the tree update slowly
 //      new PickUpItems(7, itemIds),
@@ -132,7 +136,7 @@ class BTBot extends CoreBot {
     gui.addComponent(itemPickupToggle)
     gui.addComponent(woodHuntToggle)
     
-    val pickupItems = pickUpItems(new FunInput(20))
+    val pickupItems = PickUpItems(new FunInput(20))
 //    gui.addComponent(actionButton("Skip item", e => pickupItems.skipItem()))
     gui.addComponent(actionButton("Nearby wood", e => McBot.sendMsgToPlayer(huntWood.toString)))
     
@@ -195,7 +199,7 @@ class BTBot extends CoreBot {
   
   def makePickupTest: Node = {
     val input = new DoubleInput("Max item distance", 20)
-    val node = pickUpItems(maxDistanceIn = input)
+    val node = PickUpItems(maxDistanceIn = input)
 //    gui.addComponent(actionButton("skip item", e => node.skipItem))
     node
   }
@@ -285,57 +289,6 @@ class BTBot extends CoreBot {
   
   import adawg.minecraftbot.behaviortree.gui.Input
   
-  def pickUpItems(
-      maxDistanceIn: Input[Double] = new DoubleInput("Item search radius", 20), 
-      itemHeightIn: Input[Double] = new HiddenInput("Item height offset", 1.62)
-      ): Node = {
-    var target: Option[Entity] = None
-    var blacklist: Set[Entity] = Set()
-    
-    def newTarget: Option[Entity] = filteredPickups.headOption
-    def filteredPickups = nearbyPickups filter {
-      !blacklist.contains(_)
-    } filter { e => player.getDistanceToEntity(e) < maxDistanceIn.get
-    } sortWith { (e1, e2) => player.getDistanceToEntity(e1) < player.getDistanceToEntity(e2)
-    }
-
-    def addTargetToBlacklist() = {
-      target map { i => blacklist = blacklist ++ Set(i); println("blacklisting item at " + i) }
-    }
-
-    // Gets a new target.  Returns true if a new target is successfully acquired.
-    def getNewTarget(): Boolean = {
-      addTargetToBlacklist()
-      target = newTarget
-      target map { e => println("spotted item at " + entityLoc(e)) }
-      target.isDefined
-    }
-
-//    val itemHeightIn = new DoubleInput("Item height offset", 1.62)
-
-    def groundUnderTarget = for {
-      t <- target
-      blockUnder <- firstBlockUnder(t.getLocation)
-      groundUnder = blockUnder.yCoord.ceil
-    } yield Vec3.createVectorHelper(blockUnder.xCoord, groundUnder + itemHeightIn.get, blockUnder.zCoord)
-
-    val pathfind = new FollowPath(groundUnderTarget.toSeq)
-    //    val pathfind = new StatusPrinter(new Debouncer(new StatusPrinter(pathfind, "pathfind status "), 0.5), "debounced pathfind")
-
-    val node = new ParallelNode(false, false)(
-      ActionNode {
-        val targetIsGone = target map { !nearbyPickups.contains(_) } getOrElse true
-        if (targetIsGone) getNewTarget() else Failed
-      },
-      ActionNode {blacklist = Set()}.everyNSeconds(.5)(),
-      PriorityNode(
-        pathfind.withDebouncer(0.5).onSuccess(() => getNewTarget()),
-        ActionNode { getNewTarget() }))
-
-    node.guiComponent ++= itemHeightIn.guiComponent
-    node.guiComponent ++= maxDistanceIn.guiComponent
-    node
-  }
   
   
   /**
@@ -352,10 +305,15 @@ class BTBot extends CoreBot {
     } getOrElse (Failed, new InputState)
   }
   
+  /**
+   * 
+   */
   def withReflexes(child: Node, breathThreshold: => Int, timeToBreathe: => Long) = {
     import adawg.minecraftbot.BotHelper._
     val antiDrown = {
       var lastAirTime = 0L
+      def timeSpentBreathing = System.nanoTime() - lastAirTime
+      
       ActionNode2 {
         def checkForAir() = {
           if (player.getAir() < breathThreshold) {
@@ -365,7 +323,7 @@ class BTBot extends CoreBot {
         }
         
         // If you only go to the surface for a really short time, it doesn't register on the server.
-        val shouldJump = checkForAir || System.nanoTime() - lastAirTime < timeToBreathe
+        val shouldJump = checkForAir || timeSpentBreathing < timeToBreathe
         if (shouldJump) (Success, InputState(jump = Some(true)))
         else (Failed, InputState())
       }
@@ -406,21 +364,6 @@ class BTBot extends CoreBot {
         }
       }
     }
-  }
-  
-  def recordingTest = {
-    val testRecord = List(
-        Frame(0, new InputState),
-        Frame(1e8, InputState(forward = Some(true))),
-        Frame(2e8, InputState(forward = None)),
-        Frame(1e9, InputState(forward = Some(true))),
-        Frame(2e9, InputState(forward = None)))
-    val playback = new Playback(testRecord)
-    val recorder = new Record(30, {playback.setRecording(_)})
-    gui.addComponent(actionButton( "Save recording", e => recorder.endRecording()))
-    ParallelNode(playback withToggle, recorder withToggle)
-    gui.addComponent(actionButton("reset playback node", e => playback.resetState()))
-    playback
   }
   
 }

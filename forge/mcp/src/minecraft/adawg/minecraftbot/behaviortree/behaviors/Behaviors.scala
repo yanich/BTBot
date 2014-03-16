@@ -29,6 +29,10 @@ import adawg.minecraftbot.behaviortree.decorators.DecoratorImplicits._
 import adawg.minecraftbot.util.Util
 import adawg.minecraftbot.behaviortree.gui.DoubleInput
 
+/**
+ * A lot of the stuff in this source file doesn't work
+ */
+
 
 /**
  * Break blocks if they're in range.  Otherwise, move into position to break them.
@@ -121,20 +125,6 @@ class TryMiningBlocks(blockIds: => Set[Int]) extends Node {
   
   override def update2 = node.update2()
   def update = update2._1
-  def resetState = node.resetState()
-}
-
-class PickUpItems(distance: Double, itemIds: => Set[Int]) extends Node {
-  def targetItems = itemsSatisfying { i =>
-    itemIds.contains(i.getEntityItem().itemID) &&
-    playerLoc.distanceTo(i.getLocation) < distance
-  }
-  def targetItemLocations = targetItems map {
-    _.getLocation.addVector(0, 1.62, 0)
-  }
-  val cachedLocations = Util.throttledCachedFunction(5)(targetItemLocations)
-  lazy val node = new FollowPath(cachedLocations())
-  def update = node.update()
   def resetState = node.resetState()
 }
 
