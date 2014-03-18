@@ -31,9 +31,10 @@ import net.minecraft.client.settings.GameSettings
 /**
  * A mish-mash of functions for dealing with blocks and entities in the world.
  * Includes short aliases like world, player, playerLoc.
+ * TODO reduce this to JUST short aliases?
  * 
  * At the bottom is some steering algorithms and behavior tree actions.
- * TODO move them to the actions package.
+ * TODO turn em into actions
  */
 object BotHelper {
   
@@ -159,6 +160,15 @@ object BotHelper {
     getNearestEntity(_.isInstanceOf[EntityPlayer])
   }
   
+  /**
+   * Returns a sequence of Vec3s that satisfy predicate.
+   * Looks at regularly-spaced locations (1 meter apart) 
+   * within a cube of 2 * radius on each side, centered on location.
+   * 
+   * @param location the center of the search space
+   * @param radius the length of each edge of the search space
+   * @param predicate 
+   */
   def nearbyLocations(location: Vec3, radius: Int)(predicate: Vec3 => Boolean): Seq[Vec3] = {
     val seq = for {
       dx <- (-radius to radius)
@@ -221,28 +231,6 @@ object BotHelper {
       case _ => false
     })
     players.toSeq.asInstanceOf[Seq[EntityPlayer]]
-  }
-
-  /**
-   * Returns the repulsive force from nearby mobs using coulomb's law
-   */
-  def repelFromMobs(maxDistance: Double, strength: Double = 1): Vec3 = {
-    val nearbyMobs = entitiesSatisfying(e =>
-      e.isCreatureType(EnumCreatureType.monster, false)
-        &&
-        e.getDistanceToEntity(McBot.getPlayer()) < maxDistance)
-
-    // Sum up the forces of all nearby mobs
-    val repulsiveForce = nearbyMobs.foldLeft(Vec3.createVectorHelper(0, 0, 0))(
-      (accum: Vec3, e: Entity) => {
-        //subtract mob's location from our location
-        // mob subtracted from us gives a vector from mob to us.
-        val direction = e.getLocation.subtract(playerLoc).normalize()
-        // strength/r^2
-        val magnitude = strength / player.getDistanceSqToEntity(e)
-        accum.add(direction.multiply(magnitude))
-      })
-    repulsiveForce
   }
 
   /**
