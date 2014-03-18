@@ -49,8 +49,8 @@ class DecoratedNode(child: Node) {
    * Only runs the child every <period> seconds.  Fails otherwise.
    */
   def everyNSeconds(
-      defaultPeriod: Double = 1)(
-      periodIn: DoubleInput = new DoubleInput("Time between ticks", defaultPeriod)) = {
+      defaultPeriod: Double = 1, label: String = "Time between ticks")(
+      periodIn: DoubleInput = new DoubleInput(label, defaultPeriod)) = {
     var lastTime = 0L
     def checkTime: Boolean = {
       val currentTime = System.nanoTime()

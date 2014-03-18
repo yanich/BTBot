@@ -12,7 +12,6 @@ import adawg.minecraftbot.BotHelper._
 import adawg.minecraftbot.behaviortree.gui._
 
 object PickUpItems {
-import adawg.minecraftbot.behaviortree.gui.Input
   
   def apply(
       maxDistanceIn: Input[Double] = new DoubleInput("Item search radius", 20), 
@@ -56,7 +55,7 @@ import adawg.minecraftbot.behaviortree.gui.Input
         val targetIsGone = target map { !nearbyPickups.contains(_) } getOrElse true
         if (targetIsGone) getNewTarget() else Failed
       },
-      ActionNode {blacklist = Set()}.everyNSeconds(.5)(),
+      ActionNode {blacklist = Set()}.everyNSeconds(.5, "item blacklist reset period")(),
       PriorityNode(
         pathfind.withDebouncer(0.5).onSuccess(() => getNewTarget()),
         ActionNode { getNewTarget() }))
