@@ -1,33 +1,52 @@
 package adawg.minecraftbot.behaviortree
 
-package object actions {
+import net.minecraft.util.Vec3
+import adawg.minecraftbot.BotHelper._
+object Actions {
 //
 //  /**
 //   * Functional version of steerUsingForce.  Returns InputState to steer towards target ground velocity.
 //   */
-//  def steerUsingForce2(targetVelocity: Vec3): InputState = {
-//    // Break down current velocity and target velocity into forwards and rightwards components
-//    val curFwdVel = playerVelocity.dotProduct(forwardsVector)
-//    val curSideVel = playerVelocity.dotProduct(rightVector)
-//    val tarFwdVel = targetVelocity.dotProduct(forwardsVector)
-//    val tarSideVel = targetVelocity.dotProduct(rightVector)
-//    val fwdSteering = tarFwdVel - curFwdVel
-//    val sideSteering = tarSideVel - curSideVel
-//
-//    val threshold = 0.02
-//    val forward, back, right, left = false
-//    if (targetVelocity.lengthVector() > 0) {
-//      InputState(
-//        forward = Some(fwdSteering > threshold),
-//        back = Some(fwdSteering < -threshold),
-//        right = Some(sideSteering > threshold),
-//        left = Some(sideSteering < -threshold))
-//    } else new InputState
-//  }
+  def steerUsingForce(targetVelocity: Vec3): InputState = {
+    // Break down current velocity and target velocity into forwards and rightwards components
+    val curFwdVel = playerVelocity.dotProduct(forwardsVector)
+    val curSideVel = playerVelocity.dotProduct(rightVector)
+    val tarFwdVel = targetVelocity.dotProduct(forwardsVector)
+    val tarSideVel = targetVelocity.dotProduct(rightVector)
+    val fwdSteering = tarFwdVel - curFwdVel
+    val sideSteering = tarSideVel - curSideVel
+
+    val threshold = 0.02
+    val forward, back, right, left = false
+    if (targetVelocity.lengthVector() > 0) {
+      InputState(
+        forward = Some(fwdSteering > threshold),
+        back = Some(fwdSteering < -threshold),
+        right = Some(sideSteering > threshold),
+        left = Some(sideSteering < -threshold))
+    } else new InputState
+  }
+
+  import BehaviorStatus._
+  
+  def walkWithinDistanceOf(distance: Double)(loc: => Option[Vec3]) = {
+    ActionNode2 {
+      loc match {
+        case None => (Failed, new InputState) // No one to walk to
+        case Some(loc) => {
+          val input = if (playerLoc.distanceTo(loc) > distance)
+//            walkWithoutLooking(Vec3.createVectorHelper(entity.posX, entity.posY, entity.posZ))
+            walkWhileLooking(loc, 4.3, 0.1, 0.2)
+            else new InputState
+          (Success, input)
+        }
+      }
+    }
+  }
 //  
-//  def walkWithoutLooking(goal: Vec3): InputState = {
-//    steerUsingForce2(seekVelocity(goal)).copy(jump = Some(player.posY < goal.yCoord))
-//  }
+  def walkWithoutLooking(goal: Vec3): InputState = {
+    steerUsingForce(seekVelocity(goal)).copy(jump = Some(player.posY < goal.yCoord))
+  }
 //  
 //  
 //  def walkWhileLooking(goal: Vec3, maxSpeed: Double, moveThreshold: Double, jumpThreshold: Double = 0.1): InputState = {
