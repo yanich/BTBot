@@ -66,7 +66,9 @@ class DecoratedNode(child: Node) {
   def withBenchmark = new PrintTickTime(child)
   def withBenchmark(label: => String) = new PrintTickTime(child, label)
   
+  def withToggle(label: String = "") = new GuiToggle(child, label)
   def withToggle = new GuiToggle(child)
+  
   def withDebouncer(period: Double, hasGui: Boolean = false) = {
     val periodIn = if (hasGui) new DoubleInput("", period) else new HiddenInput(period)
     new Debouncer(child, periodIn)
@@ -261,18 +263,15 @@ object WithResetButton {
   def apply(child: Node) = new WithResetButton(child)
 }
 
-class GuiToggle(child: Node) extends Node {
+class GuiToggle(child: Node, label: String = "run/stop node") extends Node {
   override val children = Seq(child)
   lazy val gui = radioButtonGroup(
     Map("run" -> { (_) => running = true },
       "stop" -> { (_) => running = false }))
 
-  guiComponent = Seq(gui)
+  guiComponent = Seq(Gui.vertBox(new Label(label), gui))
   var running = true
 
-//  def update = {
-//    if (running) child.update else Failed
-//  }
   def update = update2._1
   
   override def update2: NodeOutput = {
@@ -281,6 +280,7 @@ class GuiToggle(child: Node) extends Node {
   
   def resetState = child.resetState; gui.reset; running = true
 }
+
 object GuiToggle {
   def apply(child: Node) = new GuiToggle(child)
 }
