@@ -81,6 +81,9 @@ class DecoratedNode(child: Node) {
     child
   }
   
+  def resetOnStatus(statuses: BehaviorStatus*) = 
+    new ReactOnStatuses(child, statuses.toSet, () => child.resetState)
+  
   def onSuccess(reaction: () => Unit) = new ReactOnStatuses(child, Set(Success), reaction)
   def onFailure(reaction: () => Unit) = new ReactOnStatuses(child, Set(Failed), reaction)
 }
