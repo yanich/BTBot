@@ -178,6 +178,43 @@ class BTBotExperiments4 extends CoreBot {
     node
   }
   
+  /**
+   * Every few seconds press a random direction for a moment
+   * This helps unstick pathfollowing
+   */
+  def randomlyWiggle(
+      pressLength: Input[Double] = new DoubleInput("wiggle time (s)", 0.05),
+      pressPeriod: Input[Double] = new DoubleInput("Wiggle period (s)", 3)): Node = {
+    
+    def randomPress = scala.util.Random.nextInt(4) match {
+      case 0 => InputState(left = Some(true))
+      case 1 => InputState(right = Some(true))
+      case 2 => InputState(back = Some(true))
+      case 3 => InputState(forward = Some(true))
+    }
+    
+    var lastPressTime = System.nanoTime
+
+    def sequence = if (System.nanoTime - lastPressTime > pressPeriod.get * 1e9) {
+      
+      lastPressTime = System.nanoTime
+      
+      Seq(
+        Frame(0, InputState()),
+        Frame(pressLength.get * 1e9, randomPress))
+    } else Seq(Frame(0, InputState()))
+    
+    val node = new Playback(() => sequence).resetOnStatus(Success)
+    
+    node addGui pressLength
+    node addGui pressPeriod
+    
+    node
+  }
+  
+  /**
+   * Walks back and forth between target 1 and target 2
+   */
   def makePathfindTest: Node = {
     val in1 = new Vec3Input("target 1", playerLoc)
     val in2 = new Vec3Input("target 2", playerLoc)
@@ -191,12 +228,15 @@ class BTBotExperiments4 extends CoreBot {
       in2.set(temp)
     }
     val swapButton = actionButton("Swap targets", _ => swapTargets())
+
+    val followPathSequence: Node = SequenceNode(new FollowPath2(() => in1.get), new FollowPath2(() => in2.get))
+    val followPathLoop = followPathSequence.onSuccess {followPathSequence.resetState}
     
-    val followPath = new FollowPath(Seq(in1.get, in2.get))
+    followPathLoop addGui Gui.vertBox(save1, save2, swapButton)
+    followPathLoop addGui in1
+    followPathLoop addGui in2
     
-    followPath.guiComponent ++= Seq(Gui.vertBox(save1, save2, swapButton))
-    
-    followPath
+    ParallelNode(followPathLoop, randomlyWiggle())
   }
   
   def makePickupTest: Node = {
