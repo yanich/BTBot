@@ -19,8 +19,8 @@ object Frame {
  * A behavior tree node that plays back a preset sequence of InputStates.
  * Returns Running until playback is finished, then returns Success.
  */
-class Playback(recording: Seq[Frame]) extends Node {
-  var framesRemaining: Seq[Frame] = recording
+class Playback(recording: () => Seq[Frame]) extends Node {
+  var framesRemaining: Seq[Frame] = recording()
   var startTime: Option[Long] = None
 
   def timeSinceStart: Long = System.nanoTime - startTime.getOrElse {
@@ -40,7 +40,7 @@ class Playback(recording: Seq[Frame]) extends Node {
   }
   
   def resetState = {
-    framesRemaining = recording
+    framesRemaining = recording()
     startTime = None
   }
 }
@@ -54,7 +54,7 @@ object PlaybackTest {
         Frame(2e8, InputState(forward = None)),
         Frame(1e9, InputState(forward = Some(true))),
         Frame(2e9, InputState(forward = None)))
-    val playback = new Playback(testRecord)
+    val playback = new Playback(() => testRecord)
     playback addGui Gui.actionButton("reset dashTest", e => playback.resetState())
     playback
   }
