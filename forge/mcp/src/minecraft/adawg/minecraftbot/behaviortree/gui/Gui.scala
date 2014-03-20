@@ -118,6 +118,11 @@ class IntInput(name: String, default: Int, callback: (Int => Unit) = { i => })
           }
       }
     }
+  
+  override def set(i: Int) {
+    value = i
+    textField.text = i.toString
+  }
   guiComponent =
     Seq(Gui.vertBox(new Label(name), textField))
 }
@@ -161,6 +166,12 @@ class DoubleInput(name: String, default: Double, callback: (Double => Unit) = { 
 
 class Vec3Input(name: String, default: Vec3) extends Input(name, default) {
   def callback(i: Int): Unit = set(Vec3.createVectorHelper(xIn.get, yIn.get, zIn.get))
+  override def set(v: Vec3) {
+    xIn.set(v.xCoord.toInt)
+    yIn.set(v.yCoord.toInt)
+    zIn.set(v.zCoord.toInt)
+    value = v
+  }
   lazy val xIn = new IntInput("x", default.xCoord.toInt, callback)
   lazy val yIn = new IntInput("y", default.yCoord.toInt, callback)
   lazy val zIn = new IntInput("z", default.zCoord.toInt, callback)
