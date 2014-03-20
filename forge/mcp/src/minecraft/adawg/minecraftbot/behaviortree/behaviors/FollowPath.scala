@@ -210,18 +210,29 @@ object FollowPath {
 /**
  * New W.I.P. version of FollowPath
  * Eliminates pathSequence to allow tweaking path-following parameters.
+ * @param goal the place to pathfind to
+ * @param goalRadius the radius within which a step is considered "done"
+ * @param maxSpeed the steering algorithm's output is normalized to this magnitude
+ * @param walkThreshold the player walks forward if the forward component of steering > this
+ * @param jumpThreshold the player jumps up if the upward component of steering > this
+ * 
+ * @param pathfindTimeout Path calculations are canceled after this many seconds.
+ * 
  */
 import FollowPath._
 class FollowPath2(
   goal: () => Vec3,
-  goalRadius: Input[Double] = new DoubleInput("goal radius", 0.3),
+  goalRadius: Input[Double] = new DoubleInput("goal radius", 0.7),
   maxSpeed: Input[Double] = new DoubleInput("max speed in", 2),
-  walkThreshold: Input[Double] = new DoubleInput("walk threshold", 1),
-  jumpThreshold: Input[Double] = new DoubleInput("jump threshold", 1),
+  walkThreshold: Input[Double] = new DoubleInput("walk threshold", .5),
+  jumpThreshold: Input[Double] = new DoubleInput("jump threshold", .5),
 
   //    pathCalculator: Seq[Vec3] => Future[Path3D] = tryInOrder
   pathfindTimeout: Input[Double] = new DoubleInput("pathfind timeout (s)", 0.1))
   extends Node {
+  
+  guiComponent = goalRadius.guiComponent ++ maxSpeed.guiComponent ++
+  walkThreshold.guiComponent ++ jumpThreshold.guiComponent
   
   // A sequence of coordinates leading from player to goal.
   var path: Seq[Vec3] = Seq()
@@ -249,12 +260,28 @@ class FollowPath2(
     pathCalculation = Some(pathFuture(goal(), pathfindTimeout.get seconds, cancelFlag))
     pathCalculation.map { pc =>
       pc.onFailure {
-        case _ @ (_: NoPathException | _: TimeoutException) => lastPathFailed = true
-        case e => throw e
+        case _ @ (_: NoPathException | _: TimeoutException) => {
+          lastPathFailed = true
+          
+          pathCalculation = None
+          pathCancelFlag = None
+        }
+        case e => {
+          pathCalculation = None
+          pathCancelFlag = None
+          throw e
+        }
       }
       
       pc.onSuccess {
-        case newPath => path = newPath.getSteps.map {step => step.toVec3()}; lastPathFailed = false
+        case newPath => {
+          path = newPath.getSteps.map {step => step.toVec3()}
+          
+          lastPathFailed = false
+          
+          pathCalculation = None
+          pathCancelFlag = None
+        }
       }
       
       pc.onComplete {case _ => pathCalculation = None; pathCancelFlag = None}
@@ -266,6 +293,7 @@ class FollowPath2(
   def stepIsCompleted = path.headOption map { playerLoc.distanceTo(_) < goalRadius.get } getOrElse false
   
   def update = Error
+  
   override def update2() = {
     if (isFinished) {
       (Success, InputState())
