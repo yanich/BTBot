@@ -29,11 +29,13 @@ import adawg.minecraftbot.behaviortree.InputState
 import adawg.minecraftbot.BotHelper
 
 /**
- * I use this file to experiment.  If you recompile it while minecraft is running,
- * you can use shift+F9 to reload bots, then load up the new version w/o restarting.
- * It might not work as expected if you edit files outside of this one, tho.
+ * I use this file to experiment.  If you rename and recompile a bot class while MC is running,
+ * you can use shift+F9 to reload it, then F9 to see the new version in the menu.
+ * It will not reload anything outside of this package, though, so keep all the changes in here.
+ * That is, if you want to make changes without restarting Minecraft.
+ * 
  */
-class BTBotExperiments extends CoreBot {
+class BTBotExperiments4 extends CoreBot {
   
   lazy val rootNode: Node = 
     mkRootNode
@@ -203,93 +205,7 @@ class BTBotExperiments extends CoreBot {
 //    gui.addComponent(actionButton("skip item", e => node.skipItem))
     node
   }
-  
-  def makeHuntTest: Node = {
-    val repelDistance = new DoubleInput("Repel distance", 3)
-    val repelStrength = new DoubleInput("Repel strength", 1.01)
-    val reach = new DoubleInput("Attack reach", 4.4)
-    val howCloseToGo = new DoubleInput("How close to go", 4)
-    val attackFrequency = new DoubleInput("Attacks per second", 50)
-    val breathThreshold = new IntInput("Breath threshold", 280)
-    val timeToBreathe = new DoubleInput("Time to breathe", 3e8)
-    val inputs = Seq(repelDistance, repelStrength, reach, howCloseToGo, attackFrequency)
-//    Swing.onEDT {
-//      gui.addComponent(repelDistance)
-//      gui.addComponent(repelStrength)
-//      gui.addComponent(reach)
-//      gui.addComponent(howCloseToGo)
-//      gui.addComponent(attackFrequency)
-//      gui.addComponent(breathThreshold)
-//      gui.addComponent(timeToBreathe)
-//    }
-    
-    import EnumCreatureType._
-    val targetEntities = Seq(monster, creature)
-    val huntTree = huntTest(repelDistance.get, repelStrength.get, reach.get, howCloseToGo.get, targetEntities, attackFrequency.get)
-    
-//    huntTree.guiComponent ++= (inputs map {_.guiComponent})
-    huntTree.guiComponent ++= inputs flatMap {_.guiComponent}
-    huntTree
-//    withReflexes(huntTree, breathThreshold.get, timeToBreathe.get.toLong)
-  }
 
-  // Attacks (left-clicks) a target entity.  
-  def attackEntity(target: => Option[Entity], reach: => Double = 4.4, attacksPerSecond: => Double = 10): Node = {
-    var lastClickedTime = System.nanoTime()
-    def timeSinceLastClick = System.nanoTime() - lastClickedTime
-    def attackPeriod = 1e9 / attacksPerSecond
-    
-    ActionNode {
-      target match {
-        case None => Failed
-        case Some(entity) => {
-          if (McBot.getPlayer().getDistanceToEntity(entity) < reach) {
-            Camera.turnCam(entity, 30)
-            if (timeSinceLastClick > attackPeriod) {
-              McBot.leftClick()
-              lastClickedTime = System.nanoTime()
-              Success
-            } else Running
-          } else Failed
-        }
-      }
-    }
-  }
-      
-  def huntTest(repelDistance: => Double, repelStrength: => Double, 
-      reach: => Double, 
-      howCloseToGo: => Double, 
-      targets: Seq[EnumCreatureType],
-      attackFrequency: => Double = 10,
-      maxDistance: => Double = 20) = {
-    def getTargetOfType(creatureType: EnumCreatureType) = getNearestEntity(e =>
-      e.isCreatureType(creatureType, false)
-        && e.hurtResistantTime < 20
-        && e.getDistanceToEntity(McBot.getPlayer()) < maxDistance)
-        
-    def huntCreatureType(creatureType: EnumCreatureType) = ParallelNode(false, false)(
-      attackEntity(getTargetOfType(creatureType), reach, attackFrequency),
-//          new FollowPath(getTargetOfType(creatureType) map { _.getLocation } toSeq))
-      walkWithinDistanceOf(howCloseToGo)(groundUnderTarget(creatureType)))
-
-    def groundUnderTarget(creatureType: EnumCreatureType) = for {
-      t <- getTargetOfType(creatureType)
-      blockUnder <- firstBlockUnder(t.getLocation)
-      groundUnder = blockUnder.yCoord.ceil
-    } yield Vec3.createVectorHelper(blockUnder.xCoord, groundUnder + 1.62, blockUnder.zCoord)   
-
-    val hunts = targets map { huntCreatureType(_) }
-    ParallelNode(true, false)(
-      ActionNode2 { (Success, steerUsingForce2(repelFromMobs(repelDistance, repelStrength))) },
-      PriorityNode(hunts:_*))
-  }
-  
-  
-
-  
-  import adawg.minecraftbot.behaviortree.gui.Input
-  
-  
   
   /**
    * Precondition: Have clear line of sight to goal (Nothing in the way at all)
