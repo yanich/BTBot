@@ -1,8 +1,13 @@
 BTBot
 =====
 
-A behavior tree AI for Minecraft written in Scala. 
+A behavior tree library for automating Minecraft written in Scala. 
 
-Currently, this only runs on version 1.5.2 using Kunii's McBot framework, which modifies the Minecraft, GuiIngame, GuiIngameMenu, and MovementInputFromOptions classes.  I have also made my own changes to McBot.java and MovementInputFromOptions to enable bots to strafe and walk backwards.
+This depends on Kunii's McBot framework for Minecraft 1.5.2, which modifies the Minecraft, GuiIngame, GuiIngameMenu, and MovementInputFromOptions classes.  It also relies on some non-essential modifications to McBot that I do not yet have permission to distribute.
 
-I use Eclipse Scala IDE 3.0.2 to develop this.
+Credits
+
+Pathfinding code is adopted from Slick2D (license in "LICENSE-slick2d")
+
+Download links and installation instructions for McBot are in Kunii's thread on minecraftforums: www.minecraftforum.net/topic/1767335-152-mcbot-v14-fixed/
+
